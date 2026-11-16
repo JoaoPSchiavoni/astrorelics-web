@@ -1,6 +1,7 @@
-import React, { MutableRefObject, useMemo } from 'react';
+import React, { MutableRefObject, useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
+import { PerformanceMonitor } from '@react-three/drei';
 import { CELESTIAL_BODIES, CELESTIAL_BODY_ORDER } from '../../config/celestialBodies';
 import {
   CelestialBodyId,
@@ -46,6 +47,7 @@ interface SpaceExperienceCanvasProps {
   selectedHotspotId?: string | null;
   revealCluesList?: boolean;
   onSelectHotspot?: (hotspot: EchoesHotspot3D) => void;
+  isLowPower?: boolean;
 }
 
 export const SpaceExperienceCanvas: React.FC<SpaceExperienceCanvasProps> = ({
@@ -70,27 +72,39 @@ export const SpaceExperienceCanvas: React.FC<SpaceExperienceCanvasProps> = ({
   selectedHotspotId,
   revealCluesList,
   onSelectHotspot,
+  isLowPower: isLowPowerProp,
 }) => {
   const perfSettings = useMemo(() => {
     const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
-    const isLowPower = viewportTier === 'mobile' || cores <= 4;
+    const isLowPower = isLowPowerProp ?? (viewportTier === 'mobile' || cores <= 4);
 
     return {
-      dpr: (isLowPower ? [1, 1.5] : [1, 2]) as [number, number],
-      starCount: viewportTier === 'mobile' ? 1400 : viewportTier === 'tablet' ? 2000 : 2800,
-      streakCount: viewportTier === 'mobile' ? 280 : 540,
+      isLowPower,
+      maxDpr: isLowPower ? 1.5 : 2,
+      starCount: viewportTier === 'mobile' ? 1100 : viewportTier === 'tablet' ? 1800 : 2800,
+      streakCount: viewportTier === 'mobile' ? 220 : 540,
     };
-  }, [viewportTier]);
+  }, [viewportTier, isLowPowerProp]);
+
+  const [dpr, setDpr] = useState<number>(() => {
+    if (typeof window === 'undefined') return 1;
+    return Math.min(window.devicePixelRatio || 1, perfSettings.maxDpr);
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setDpr(Math.min(window.devicePixelRatio || 1, perfSettings.maxDpr));
+  }, [perfSettings.maxDpr]);
 
   return (
     <div className="fixed inset-0 w-full h-full bg-[#02040A] select-none">
       <Canvas
-        shadows="soft"
-        dpr={perfSettings.dpr}
+        shadows={perfSettings.isLowPower ? true : 'soft'}
+        dpr={dpr}
         camera={{ position: [0, 0, 8.2], fov: 42, near: 0.1, far: 160 }}
         gl={{
-          antialias: true,
-          powerPreference: 'high-performance',
+          antialias: !perfSettings.isLowPower,
+          powerPreference: perfSettings.isLowPower ? 'default' : 'high-performance',
           toneMapping: THREE.ACESFilmicToneMapping,
           toneMappingExposure: 1.08,
         }}
@@ -100,10 +114,16 @@ export const SpaceExperienceCanvas: React.FC<SpaceExperienceCanvasProps> = ({
           }
         }}
       >
+        <PerformanceMonitor
+          onDecline={() => setDpr(1)}
+          onIncline={() =>
+            setDpr(Math.min(window.devicePixelRatio || 1, perfSettings.maxDpr))
+          }
+        />
         <color attach="background" args={['#02040A']} />
 
         {/* Iluminação espacial coerente com o Sol distante */}
-        <SpaceLighting />
+        <SpaceLighting viewportTier={viewportTier} />
 
         {/* Fundo espacial profundo com estrelas variadas e nebulosas discretas */}
         <StarfieldAndNebula
@@ -135,7 +155,7 @@ export const SpaceExperienceCanvas: React.FC<SpaceExperienceCanvasProps> = ({
             reducedMotion={reducedMotion}
             dragStateRef={dragStateRef}
             travelRef={travelRef}
-            onHighlightBody={(targetId) => onHighlightBody(targetId)}
+            onHighlightBody={onHighlightBody}
             onInitiateTravel={onInitiateTravel}
             onSelectArtifact={onSelectArtifact}
           />

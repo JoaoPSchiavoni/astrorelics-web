@@ -2,6 +2,11 @@ import React, { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import { SUN_SCENE_CONFIG } from '../../config/celestialBodies';
+import { ViewportTier } from '../../types/experience';
+
+interface SpaceLightingProps {
+  viewportTier?: ViewportTier;
+}
 
 const SUN_CORONA_VERT = /* glsl */ `
   varying vec2 vUv;
@@ -43,10 +48,13 @@ const SUN_CORONA_FRAG = /* glsl */ `
   }
 `;
 
-export const SpaceLighting: React.FC = () => {
+export const SpaceLighting: React.FC<SpaceLightingProps> = ({
+  viewportTier = 'desktop',
+}) => {
   const { viewport } = useThree();
   const coronaMeshRef = useRef<THREE.Mesh>(null);
   const sunGroupRef = useRef<THREE.Group>(null);
+  const shadowMapRes = viewportTier === 'mobile' ? 1024 : 2048;
 
   const coronaUniforms = useMemo(
     () => ({
@@ -87,7 +95,7 @@ export const SpaceLighting: React.FC = () => {
         intensity={2.95}
         color="#FFF9EE"
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[shadowMapRes, shadowMapRes]}
         shadow-bias={-0.0003}
         shadow-normalBias={0.015}
         shadow-camera-near={1}

@@ -34,7 +34,8 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyConfig> = {
     subtitle: 'Berço da Exploração Espacial · Ponto de Origem',
     description:
       'Nosso mundo oceânico protegido por uma fina camada atmosférica. Daqui partiram todas as sondas, módulos lunares e rovers enviados para investigar o Sistema Solar.',
-    modelPath: '/3d_models/Earth_1_12756.glb',
+    modelPath: '/3d_models/Earth_1_12756.glb?v=opt1',
+    mobileModelPath: '/3d_models/Earth_1_12756.mobile.glb?v=opt1',
     candidatePaths: [
       '/3d_models/Earth_1_12756.glb',
       '/3d_models/earth.glb',
@@ -91,7 +92,8 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyConfig> = {
     subtitle: 'Satélite Natural da Terra · Arquivo Silencioso',
     description:
       'Superfície rochosa preservada no vácuo sem atmosfera. Guarda módulos de descida, sismômetros passivos e retrorefletores laser das missões Apollo que ainda respondem a pulsos enviados da Terra.',
-    modelPath: '/3d_models/moon_small.glb',
+    modelPath: '/3d_models/moon_small.glb?v=opt1',
+    mobileModelPath: '/3d_models/moon_small.mobile.glb?v=opt1',
     candidatePaths: [
       '/3d_models/moon_small.glb',
       '/3d_models/Moon_1_3474.glb',
@@ -150,7 +152,7 @@ export const CELESTIAL_BODIES: Record<CelestialBodyId, CelestialBodyConfig> = {
     subtitle: 'O Planeta Vermelho · Fronteira dos Rovers',
     description:
       'Deserto frio de óxido de ferro com cânions colossais e uma atmosfera rarefeita. Suas planícies abrigam rovers históricos e sondas cujos sinais encerraram após tempestades globais de poeira.',
-    modelPath: '/3d_models/24881_Mars_1_6792.glb',
+    modelPath: '/3d_models/24881_Mars_1_6792.glb?v=opt1',
     candidatePaths: [
       '/3d_models/24881_Mars_1_6792.glb',
       '/3d_models/mars.glb',

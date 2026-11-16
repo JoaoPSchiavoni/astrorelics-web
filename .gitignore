@@ -70,6 +70,8 @@ dist-ssr
 build
 *.local
 Agents/
+test-results/
+playwright-report/
 
 # Editor directories and files
 .vscode/*

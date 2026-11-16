@@ -53,6 +53,11 @@ export interface CelestialBodyConfig {
   description: string;
   /** Caminho principal do modelo 3D (GLB/GLTF) */
   modelPath: string;
+  /**
+   * Variante leve do modelo (texturas ≤ 2048px) usada em smartphones e dispositivos de baixo
+   * desempenho para reduzir download, memória de GPU e travamentos no upload das texturas.
+   */
+  mobileModelPath?: string;
   /** Caminhos alternativos verificados automaticamente para facilitar substituição */
   candidatePaths: string[];
   /** Raio normalizado em unidades de cena quando o corpo está selecionado em primeiro plano */

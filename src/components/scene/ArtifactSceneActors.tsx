@@ -72,8 +72,10 @@ export const ArtifactPinMarker: React.FC<ArtifactPinMarkerProps> = ({
       }}
     >
       <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
+        onPointerEnter={(e) => {
+          if (e.pointerType === 'mouse') setHovered(true);
+        }}
+        onPointerLeave={() => setHovered(false)}
         onClick={(e) => {
           e.stopPropagation();
           onSelectArtifact(artifact.id);
@@ -123,8 +125,8 @@ export const ArtifactPinMarker: React.FC<ArtifactPinMarkerProps> = ({
                 ? `Jump at light speed to ${artifact.name}`
                 : `Viajar na velocidade da luz até ${artifact.name}`
             }
-            className={`relative rounded-full flex items-center justify-center transition-all duration-200 border-2 shadow-[0_0_22px_rgba(14,165,233,0.4)] ${
-              compact ? 'w-10 h-10 p-1' : 'w-12 h-12 p-1.5'
+            className={`relative rounded-full flex items-center justify-center transition-all duration-200 border-2 shadow-[0_0_22px_rgba(14,165,233,0.4)] min-w-[44px] min-h-[44px] ${
+              compact ? 'w-11 h-11 p-1.5' : 'w-12 h-12 p-1.5'
             } ${
               hovered || isActive
                 ? 'scale-115 bg-[#0B2144] border-white shadow-[0_0_28px_rgba(56,189,248,0.75)]'
@@ -288,7 +290,7 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
   revealCluesList = false,
   onSelectHotspot,
 }) => {
-  const { gl } = useThree();
+  const { gl, size } = useThree();
   const rootRef = useRef<THREE.Group>(null);
   const spinRef = useRef<THREE.Group>(null);
   const [loadedModels, setLoadedModels] = useState<
@@ -303,6 +305,14 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
     pmrem.dispose();
     return tex;
   }, [gl]);
+
+  useEffect(() => {
+    return () => {
+      artifactEnvTex.dispose();
+    };
+  }, [artifactEnvTex]);
+
+  const shadowMapRes = viewportTier === 'mobile' ? 1024 : 2048;
 
   // Determina qual artefato deve estar visível (o ativo atual ou o alvo de um salto em andamento)
   const displayedId =
@@ -360,11 +370,18 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
     }
 
     const config = SPACE_ARTIFACTS[targetId];
-    const tierScale =
-      viewportTier === 'mobile' ? 0.72 : viewportTier === 'tablet' ? 0.88 : 1.0;
+    const isLandscapeCompact = size.width > size.height && size.height < 500;
+    const tierScale = isLandscapeCompact
+      ? 0.68
+      : viewportTier === 'mobile'
+      ? 0.72
+      : viewportTier === 'tablet'
+      ? 0.88
+      : 1.0;
     const finalScale = config.inspectRadius * tierScale;
-    const fgX = viewportTier === 'desktop' ? -1.05 : 0.0;
-    const fgY = viewportTier === 'mobile' ? 0.42 : 0.26;
+    const fgX =
+      viewportTier === 'desktop' ? -1.05 : isLandscapeCompact ? -0.82 : 0.0;
+    const fgY = isLandscapeCompact ? 0.08 : viewportTier === 'mobile' ? 0.42 : 0.26;
 
     if (travel.isTraveling && travel.targetArtifactId) {
       // Durante o salto na velocidade da luz: o objeto emerge do hiperespaço na fase final (progress > 0.42)
@@ -434,7 +451,7 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
         intensity={1.15}
         color="#FFFDF9"
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[shadowMapRes, shadowMapRes]}
         shadow-bias={-0.00025}
         shadow-normalBias={0.014}
         shadow-camera-near={0.5}
@@ -461,7 +478,7 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
               <group key={hotspot.id} position={hotspot.position3D}>
                 <Html
                   center
-                  zIndexRange={[22, 0]}
+                  zIndexRange={[19, 0]}
                   style={{
                     pointerEvents: 'auto',
                     userSelect: 'none',
@@ -476,7 +493,7 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
                       }}
                       aria-label={`${hotspot.indexNumber}: ${hotspot.label}`}
                       title={hotspot.label}
-                      className={`group relative flex items-center gap-1.5 px-2.5 py-1 rounded-full backdrop-blur-md border text-[11px] font-display font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
+                      className={`group relative min-h-[44px] sm:min-h-0 flex items-center gap-1.5 px-3 py-1.5 sm:px-2.5 sm:py-1 rounded-full backdrop-blur-md border text-[11px] font-display font-semibold transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${
                         isSelected
                           ? 'bg-amber-400 text-[#030914] border-white scale-110 shadow-[0_0_24px_rgba(251,191,36,0.85)]'
                           : isDiscovered
@@ -501,7 +518,7 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
                       <span className="whitespace-nowrap pr-0.5">{hotspot.shortLabel}</span>
                     </button>
                   ) : (
-                    /* Marcador luminoso bem discreto sobre o modelo 3D quando as pistas estão ocultas */
+                    /* Marcador luminoso bem discreto sobre o modelo 3D quando as pistas estão ocultas, mas com área de toque de 44x44px */
                     <button
                       type="button"
                       onClick={(e) => {
@@ -509,8 +526,8 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
                         onSelectHotspot?.(hotspot);
                       }}
                       aria-label={`Vestígio luminoso ${hotspot.indexNumber}`}
-                      title="Vestígio luminoso — clique para investigar"
-                      className="group relative w-6 h-6 flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                      title="Vestígio luminoso — toque para investigar"
+                      className="group relative w-11 h-11 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
                     >
                       <span className="absolute w-4 h-4 rounded-full bg-sky-300/25 animate-ping pointer-events-none" />
                       <span className="w-2.5 h-2.5 rounded-full bg-sky-200/85 group-hover:bg-amber-300 group-hover:scale-125 border border-white/80 shadow-[0_0_10px_rgba(125,211,252,0.9)] transition-all" />
@@ -522,16 +539,19 @@ export const ArtifactShowcaseActor: React.FC<ArtifactShowcaseActorProps> = ({
           })}
       </group>
 
-      {/* Sombra de contato projetada abaixo do artefato 3D para dar profundidade espacial e volume */}
-      <ContactShadows
-        position={[0, -1.08, 0]}
-        opacity={0.72}
-        scale={3.6}
-        blur={1.9}
-        far={2.8}
-        resolution={512}
-        color="#00030A"
-      />
+      {/* Sombra de contato projetada abaixo do artefato 3D somente quando há objeto em exibição */}
+      {Boolean(displayedId) && (
+        <ContactShadows
+          position={[0, -1.08, 0]}
+          opacity={0.72}
+          scale={3.6}
+          blur={1.9}
+          far={2.8}
+          resolution={viewportTier === 'mobile' ? 256 : 512}
+          frames={viewportTier === 'mobile' ? 1 : Infinity}
+          color="#00030A"
+        />
+      )}
     </group>
   );
 };

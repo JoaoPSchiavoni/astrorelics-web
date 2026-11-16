@@ -68,4 +68,20 @@ function serve3DModelsPlugin() {
 export default defineConfig({
   plugins: [react(), serve3DModelsPlugin()],
   assetsInclude: ['**/*.glb', '**/*.gltf'],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'three-core': ['three'],
+          'r3f-drei': ['@react-three/fiber', '@react-three/drei'],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 800,
+  },
+  server: {
+    watch: {
+      ignored: ['**/*.pdf'],
+    },
+  },
 });

@@ -6,8 +6,9 @@ import {
   ExperienceState,
   SpaceArtifactId,
   TravelPhase,
-  ViewportTier,
 } from './types/experience';
+import { useDeviceProfile } from './hooks/useDeviceProfile';
+import { useBackNavigation } from './hooks/useBackNavigation';
 import {
   LoadedCelestialAsset,
   loadSpaceArtifactModel,
@@ -69,12 +70,6 @@ function checkWebGLSupport(): boolean {
   }
 }
 
-function getViewportTier(width: number): ViewportTier {
-  if (width < 640) return 'mobile';
-  if (width < 1024) return 'tablet';
-  return 'desktop';
-}
-
 export const App: React.FC = () => {
   const [webglSupported] = useState<boolean>(() => checkWebGLSupport());
 
@@ -105,18 +100,24 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  const [viewportTier, setViewportTier] = useState<ViewportTier>(() =>
-    typeof window !== 'undefined' ? getViewportTier(window.innerWidth) : 'desktop'
-  );
-  const [reducedMotion, setReducedMotion] = useState<boolean>(() =>
-    typeof window !== 'undefined' && window.matchMedia
-      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      : false
-  );
+  const {
+    viewportTier,
+    isLandscapeMobile,
+    reducedMotion,
+    isLowPower,
+  } = useDeviceProfile();
+
+  const [hasInteracted3D, setHasInteracted3D] = useState<boolean>(false);
+
+  const handleUserInteractionStart = useCallback(() => {
+    setHasInteracted3D(true);
+  }, []);
 
   const dragStateRef = useRef<ExplorationDragState>({
     userRotationOffset: new THREE.Vector2(0, 0),
     targetRotationOffset: new THREE.Vector2(0, 0),
+    userZoom: 1.0,
+    targetZoom: 1.0,
     isDragging: false,
     lastDragEndTime: 0,
   });
@@ -137,24 +138,6 @@ export const App: React.FC = () => {
     targetArtifactId: null,
     isArtifactJump: false,
   });
-
-  useEffect(() => {
-    const handleResize = () => {
-      setViewportTier(getViewportTier(window.innerWidth));
-    };
-    window.addEventListener('resize', handleResize);
-
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const handleMotionChange = (e: MediaQueryListEvent) => {
-      setReducedMotion(e.matches);
-    };
-    mediaQuery.addEventListener('change', handleMotionChange);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-      mediaQuery.removeEventListener('change', handleMotionChange);
-    };
-  }, []);
 
   const runPreload = useCallback(async (force = false) => {
     setExperienceState('loading');
@@ -209,6 +192,7 @@ export const App: React.FC = () => {
   const handleResetOrientation = useCallback(() => {
     if (experienceState !== 'exploring') return;
     dragStateRef.current.targetRotationOffset.set(0, 0);
+    dragStateRef.current.targetZoom = 1.0;
     parallaxOffsetRef.current.set(0, 0);
     soundEffects.playResetTone();
   }, [experienceState]);
@@ -224,6 +208,7 @@ export const App: React.FC = () => {
       if (destinationId === selectedId && activeArtifactId !== null) {
         dragStateRef.current.targetRotationOffset.set(0, 0);
         dragStateRef.current.userRotationOffset.set(0, 0);
+        dragStateRef.current.targetZoom = 1.0;
         parallaxOffsetRef.current.set(0, 0);
         setActiveArtifactId(null);
         soundEffects.playResetTone();
@@ -238,6 +223,7 @@ export const App: React.FC = () => {
 
       dragStateRef.current.targetRotationOffset.set(0, 0);
       dragStateRef.current.userRotationOffset.set(0, 0);
+      dragStateRef.current.targetZoom = 1.0;
       parallaxOffsetRef.current.set(0, 0);
 
       const currentSlots = { ...travelRef.current.toSlots };
@@ -293,6 +279,7 @@ export const App: React.FC = () => {
 
       dragStateRef.current.targetRotationOffset.set(0, 0);
       dragStateRef.current.userRotationOffset.set(0, 0);
+      dragStateRef.current.targetZoom = 1.0;
       parallaxOffsetRef.current.set(0, 0);
 
       const currentSlots = { ...travelRef.current.toSlots };
@@ -331,6 +318,7 @@ export const App: React.FC = () => {
     if (experienceState !== 'exploring') return;
     dragStateRef.current.targetRotationOffset.set(0, 0);
     dragStateRef.current.userRotationOffset.set(0, 0);
+    dragStateRef.current.targetZoom = 1.0;
     parallaxOffsetRef.current.set(0, 0);
     setActiveArtifactId(null);
     soundEffects.playResetTone();
@@ -434,6 +422,13 @@ export const App: React.FC = () => {
     setIsMissionPanelOpen((prev) => !prev);
   }, []);
 
+  useBackNavigation({
+    activeArtifactId,
+    isMissionPanelOpen,
+    onCloseMissionPanel: () => setIsMissionPanelOpen(false),
+    onCloseArtifact: handleCloseArtifact,
+  });
+
   const handleUnlockEnding = useCallback((missionId: MissionId, endingId: string) => {
     const updated = saveUnlockedEnding(missionId, endingId);
     setUnlockedEndings(updated);
@@ -507,11 +502,13 @@ export const App: React.FC = () => {
           onSelectArtifact={handleSelectArtifact}
           onTravelPhaseChange={setTravelPhase}
           onTravelComplete={handleTravelComplete}
+          onUserInteractionStart={handleUserInteractionStart}
           activeHotspots={activeHotspotsFor3D}
           discoveredHotspotIds={discoveredHotspotIdsFor3D}
           selectedHotspotId={selectedHotspotId}
           revealCluesList={revealCluesList}
           onSelectHotspot={handleInspectHotspot}
+          isLowPower={isLowPower}
         />
 
         <HeaderHud
@@ -523,6 +520,11 @@ export const App: React.FC = () => {
           reducedMotion={reducedMotion}
           onSelectDestination={handleInitiateTravel}
           onToggleAudio={handleToggleAudio}
+          isMissionOpen={isMissionPanelOpen}
+          echoesReconstructedCount={echoesState.reconstructedSignals.length}
+          hasActiveMissionRun={hasActiveMissionRun}
+          onToggleMission={handleToggleMissionPanel}
+          isLandscapeMobile={isLandscapeMobile}
         />
 
         {experienceState !== 'loading' && experienceState !== 'error' && (
@@ -534,6 +536,7 @@ export const App: React.FC = () => {
               totalEndings={OPPORTUNITY_MISSION.endingOrder.length}
               hasActiveRun={hasActiveMissionRun}
               onToggle={handleToggleMissionPanel}
+              isLandscapeMobile={isLandscapeMobile}
             />
 
             <MissionOverlayPanel
@@ -559,6 +562,7 @@ export const App: React.FC = () => {
               onFocusArtifact={handleSelectArtifact}
               onUnlockEnding={handleUnlockEnding}
               onActiveRunChange={setHasActiveMissionRun}
+              onResetOrientation={handleResetOrientation}
             />
           </>
         )}
@@ -579,6 +583,9 @@ export const App: React.FC = () => {
               ? `${activeEchoesSignal.signalCode}: “${activeEchoesSignal.unidentifiedTitle}”`
               : undefined
           }
+          isMissionPanelOpen={isMissionPanelOpen}
+          hasInteracted3D={hasInteracted3D}
+          isLandscapeMobile={isLandscapeMobile}
         />
       </div>
     </LanguageContext.Provider>

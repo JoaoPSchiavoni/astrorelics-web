@@ -11,6 +11,7 @@ import {
   ViewportTier,
 } from '../../types/experience';
 import { LoadedCelestialAsset } from '../../utils/modelPreloader';
+import { getLocalizedBody, useLanguage } from '../../utils/i18n';
 import {
   computeAllTransitionTransforms,
   getSlotTransform,
@@ -53,6 +54,9 @@ export const CelestialBodyActor: React.FC<CelestialBodyActorProps> = ({
   onSelectArtifact,
 }) => {
   const { viewport, gl } = useThree();
+  const { lang } = useLanguage();
+  const isEn = lang === 'en';
+  const localizedBody = getLocalizedBody(config.id, lang);
   const rootGroupRef = useRef<THREE.Group>(null);
   const spinGroupRef = useRef<THREE.Group>(null);
   const ringRef = useRef<THREE.Mesh>(null);
@@ -224,7 +228,12 @@ export const CelestialBodyActor: React.FC<CelestialBodyActorProps> = ({
     const deltaClick = now - lastClickTimeRef.current;
     lastClickTimeRef.current = now;
 
-    if (deltaClick > 20 && deltaClick < 380) {
+    // No mobile ou se o planeta já estiver destacado, o toque inicia a viagem diretamente sem exigir duplo clique rápido
+    if (
+      viewportTier === 'mobile' ||
+      highlightedId === config.id ||
+      (deltaClick > 20 && deltaClick < 380)
+    ) {
       onInitiateTravel(config.id);
       return;
     }
@@ -279,6 +288,12 @@ export const CelestialBodyActor: React.FC<CelestialBodyActorProps> = ({
             const [lat, lon] = artifact.surfaceLatLon!;
             const pos = latLonToVector3(lat, lon, 1.07);
             const stemEnd = latLonToVector3(lat, lon, 1.0);
+            const isCompactScreen =
+              viewportTier === 'mobile' ||
+              (viewport.aspect > 1.05 && gl.domElement.clientHeight < 500);
+            // Em telas de smartphone, oculta os pins HTML nos planetas ao fundo para não encavalar
+            // com o rótulo do astro distante; ao selecionar o planeta (ou no desktop/tablet), eles aparecem.
+            const showPinHtml = isSelected || !isCompactScreen;
             return (
               <group key={artifact.id}>
                 {/* Ponto luminoso na superfície onde o equipamento foi deixado */}
@@ -286,15 +301,17 @@ export const CelestialBodyActor: React.FC<CelestialBodyActorProps> = ({
                   <sphereGeometry args={[0.028, 12, 12]} />
                   <meshBasicMaterial color={artifact.accentColor} />
                 </mesh>
-                <group position={pos}>
-                  <ArtifactPinMarker
-                    artifact={artifact}
-                    activeArtifactId={activeArtifactId}
-                    experienceState={experienceState}
-                    compact={!isSelected}
-                    onSelectArtifact={onSelectArtifact}
-                  />
-                </group>
+                {showPinHtml && (
+                  <group position={pos}>
+                    <ArtifactPinMarker
+                      artifact={artifact}
+                      activeArtifactId={activeArtifactId}
+                      experienceState={experienceState}
+                      compact={!isSelected}
+                      onSelectArtifact={onSelectArtifact}
+                    />
+                  </group>
+                )}
               </group>
             );
           })}
@@ -334,7 +351,11 @@ export const CelestialBodyActor: React.FC<CelestialBodyActorProps> = ({
               e.stopPropagation();
               if (experienceState !== 'exploring') return;
               const now = performance.now();
-              if (now - lastClickTimeRef.current < 380) {
+              if (
+                viewportTier === 'mobile' ||
+                highlightedId === config.id ||
+                now - lastClickTimeRef.current < 380
+              ) {
                 onInitiateTravel(config.id);
               } else {
                 onHighlightBody(config.id);
@@ -347,30 +368,49 @@ export const CelestialBodyActor: React.FC<CelestialBodyActorProps> = ({
               onInitiateTravel(config.id);
             }}
             className={`group flex flex-col items-center cursor-pointer transition-all duration-200 ${
-              isHighlighted ? 'scale-105' : 'opacity-85 hover:opacity-100'
+              isHighlighted ? 'scale-105' : 'opacity-90 hover:opacity-100'
             }`}
           >
-            <div
-              className={`px-2.5 py-1 rounded-full backdrop-blur-md border transition-colors flex items-center gap-1.5 ${
+            <button
+              type="button"
+              aria-label={
+                isEn
+                  ? `Travel to ${localizedBody.name}`
+                  : `Viajar para ${localizedBody.name}`
+              }
+              className={`min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 px-3.5 py-1.5 sm:px-2.5 sm:py-1 rounded-full backdrop-blur-md border transition-colors flex items-center justify-center gap-1.5 ${
                 isHighlighted
-                  ? 'bg-[#08152C]/90 border-sky-400/80 text-white shadow-[0_0_20px_rgba(56,189,248,0.28)]'
-                  : 'bg-[#040915]/75 border-slate-700/60 text-slate-200 hover:border-sky-400/50'
+                  ? 'bg-[#08152C]/95 border-sky-400/80 text-white shadow-[0_0_20px_rgba(56,189,248,0.28)]'
+                  : 'bg-[#040915]/85 border-slate-700/70 text-slate-100 hover:border-sky-400/50'
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  isHighlighted ? 'bg-sky-400 animate-pulse' : 'bg-slate-400'
+                  isHighlighted ? 'bg-sky-400 animate-pulse' : 'bg-sky-400/75'
                 }`}
               />
               <span className="text-xs font-display font-semibold tracking-wide whitespace-nowrap">
-                {config.name}
+                {localizedBody.name}
               </span>
-            </div>
+            </button>
 
             {isHighlighted && (
-              <div className="mt-1.5 px-2.5 py-1 rounded-md bg-[#061022]/95 border border-sky-400/40 text-[11px] text-sky-300 font-medium whitespace-nowrap shadow-lg animate-fadeIn">
-                Clique 2x para viajar
-              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onInitiateTravel(config.id);
+                }}
+                className="mt-1.5 px-2.5 py-1 rounded-md bg-[#061022]/95 border border-sky-400/50 text-[11px] text-sky-300 font-medium whitespace-nowrap shadow-lg animate-fadeIn"
+              >
+                {viewportTier === 'mobile'
+                  ? isEn
+                    ? 'Tap to travel →'
+                    : 'Toque para viajar →'
+                  : isEn
+                  ? 'Click to travel →'
+                  : 'Clique para viajar →'}
+              </button>
             )}
           </div>
         </Html>

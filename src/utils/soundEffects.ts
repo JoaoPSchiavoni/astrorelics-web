@@ -39,7 +39,9 @@ class SpaceSoundController {
       }
 
       audio.loop = true;
-      audio.preload = 'auto';
+      // 'none': a trilha (~5 MB) só é transmitida quando realmente tocar, sem disputar banda
+      // com os modelos 3D durante o carregamento inicial (crítico em redes móveis).
+      audio.preload = 'none';
       audio.volume = this.baseBgVolume;
       audio.muted = false;
 

@@ -56,6 +56,7 @@ interface EchoesOfSpacePanelProps {
   onResetEchoes: () => void;
   onExploreFreely: () => void;
   onDustLevelChange: (dustPercent: number) => void;
+  onRequestMinimize?: () => void;
 }
 
 export const EchoesOfSpacePanel: React.FC<EchoesOfSpacePanelProps> = ({
@@ -71,6 +72,7 @@ export const EchoesOfSpacePanel: React.FC<EchoesOfSpacePanelProps> = ({
   onResetEchoes,
   onExploreFreely,
   onDustLevelChange,
+  onRequestMinimize,
 }) => {
   const { lang } = useLanguage();
   const isEn = lang === 'en';
@@ -446,7 +448,7 @@ export const EchoesOfSpacePanel: React.FC<EchoesOfSpacePanelProps> = ({
                 setViewMode('map');
                 onDustLevelChange(0);
               }}
-              className="px-2.5 py-1 rounded-lg bg-[#0B2145] hover:bg-[#123163] border border-sky-400/40 text-[11px] font-semibold text-sky-200 flex items-center gap-1 transition-colors"
+              className="min-h-[44px] md:min-h-0 px-2.5 py-1 rounded-lg bg-[#0B2145] hover:bg-[#123163] border border-sky-400/40 text-[11px] font-semibold text-sky-200 flex items-center gap-1 transition-colors"
             >
               <Compass className="w-3 h-3 text-sky-400" />
               <span>{isEn ? 'Signal Map' : 'Mapa de Sinais'}</span>
@@ -459,7 +461,7 @@ export const EchoesOfSpacePanel: React.FC<EchoesOfSpacePanelProps> = ({
               soundEffects.playMissionClick();
               setViewMode((prev) => (prev === 'credits' ? 'map' : 'credits'));
             }}
-            className="px-2 py-1 rounded-lg bg-[#081730] hover:bg-[#0E2448] border border-slate-700 text-[11px] text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
+            className="min-h-[44px] md:min-h-0 px-2.5 py-1 rounded-lg bg-[#081730] hover:bg-[#0E2448] border border-slate-700 text-[11px] text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
             title={
               isEn
                 ? 'Scientific sources, simplifications & 3D model credits'
@@ -859,7 +861,7 @@ export const EchoesOfSpacePanel: React.FC<EchoesOfSpacePanelProps> = ({
                     setActiveStep(st.id);
                     setHintLevel(0);
                   }}
-                  className={`py-1.5 px-2 rounded-lg text-[11px] font-display font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  className={`min-h-[44px] md:min-h-0 py-1.5 px-2 rounded-lg text-[11px] font-display font-semibold flex items-center justify-center gap-1.5 transition-all ${
                     isActive
                       ? 'bg-[#0F274D] text-white border border-sky-400/50 shadow'
                       : isCompletedStep
@@ -901,30 +903,46 @@ export const EchoesOfSpacePanel: React.FC<EchoesOfSpacePanelProps> = ({
                       : `Pistas Encontradas (${discoveredClueIdsForCurrent.length} de 3)`}
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      soundEffects.playMissionClick();
-                      onToggleRevealCluesList();
-                    }}
-                    className={`px-3 py-1.5 rounded-xl border text-xs font-display font-semibold flex items-center gap-1.5 transition-all ${
-                      revealCluesList
-                        ? 'bg-[#0E2750] border-sky-400 text-sky-100 shadow-sm'
-                        : 'bg-[#091A36] hover:bg-[#112A54] border-amber-400/50 text-amber-200'
-                    }`}
-                  >
-                    {revealCluesList ? (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5 text-sky-300" />
-                        <span>{isEn ? 'Hide clues' : 'Esconder pistas'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{isEn ? 'Show clues' : 'Mostrar pistas'}</span>
-                      </>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {onRequestMinimize && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          soundEffects.playMissionClick();
+                          onRequestMinimize();
+                        }}
+                        className="md:hidden min-h-[44px] px-3 py-1.5 rounded-xl bg-sky-500/20 border border-sky-400 text-xs font-display font-bold text-sky-100 flex items-center gap-1.5 shadow-sm transition-all"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-sky-300" />
+                        <span>{isEn ? 'Explore 3D Model' : 'Explorar Modelo 3D'}</span>
+                      </button>
                     )}
-                  </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        soundEffects.playMissionClick();
+                        onToggleRevealCluesList();
+                      }}
+                      className={`min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-xl border text-xs font-display font-semibold flex items-center gap-1.5 transition-all ${
+                        revealCluesList
+                          ? 'bg-[#0E2750] border-sky-400 text-sky-100 shadow-sm'
+                          : 'bg-[#091A36] hover:bg-[#112A54] border-amber-400/50 text-amber-200'
+                      }`}
+                    >
+                      {revealCluesList ? (
+                        <>
+                          <EyeOff className="w-3.5 h-3.5 text-sky-300" />
+                          <span>{isEn ? 'Hide clues' : 'Esconder pistas'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{isEn ? 'Show clues' : 'Mostrar pistas'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Modo Mistério (Pistas ocultas na lista): o usuário procura os brilhos discretos no modelo 3D */}

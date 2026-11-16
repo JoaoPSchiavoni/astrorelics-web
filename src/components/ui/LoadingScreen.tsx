@@ -518,7 +518,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="h-9 px-4 rounded-lg bg-white hover:bg-slate-200 text-black font-display font-semibold text-xs flex items-center gap-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  className="min-h-[44px] sm:min-h-0 sm:h-9 px-4 rounded-lg bg-white hover:bg-slate-200 text-black font-display font-semibold text-xs flex items-center gap-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   <span>Tentar novamente</span>
@@ -527,7 +527,7 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
                 <button
                   type="button"
                   onClick={onContinueWithFallback}
-                  className="h-9 px-3.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/25 text-xs text-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                  className="min-h-[44px] sm:min-h-0 sm:h-9 px-3.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/25 text-xs text-slate-200 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 >
                   Usar modelos provisórios
                 </button>

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { CELESTIAL_BODIES, CELESTIAL_BODY_ORDER } from '../config/celestialBodies';
 import { SPACE_ARTIFACTS, SPACE_ARTIFACT_ORDER } from '../config/spaceArtifacts';
 import { CelestialBodyConfig, CelestialBodyId, SpaceArtifactId } from '../types/experience';
@@ -21,14 +22,60 @@ export interface PreloadProgressState {
 const assetCache: Partial<Record<CelestialBodyId, LoadedCelestialAsset>> = {};
 
 /**
+ * Loader GLTF compartilhado. Os modelos em `3d_models/` são otimizados com texturas WebP
+ * (EXT_texture_webp) e geometria comprimida (EXT_meshopt_compression), então o decoder
+ * Meshopt precisa estar registrado antes de qualquer carregamento.
+ */
+let sharedLoader: GLTFLoader | null = null;
+function getLoader(): GLTFLoader {
+  if (!sharedLoader) {
+    sharedLoader = new GLTFLoader();
+    sharedLoader.setMeshoptDecoder(MeshoptDecoder);
+  }
+  return sharedLoader;
+}
+
+/**
+ * Indica se devemos priorizar assets leves (smartphones, telas pequenas ou pouca memória).
+ * Nesses casos usamos as variantes `.mobile.glb` (texturas ≤ 2048px) e anisotropia menor.
+ */
+export function prefersLightAssets(): boolean {
+  if (typeof window === 'undefined') return false;
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const isCoarse =
+    typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  const shortSide = Math.min(window.innerWidth, window.innerHeight);
+  return (
+    window.innerWidth < 768 ||
+    (isCoarse && shortSide < 600) ||
+    (nav.deviceMemory !== undefined && nav.deviceMemory <= 4)
+  );
+}
+
+function isSaveDataEnabled(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean } };
+  return Boolean(nav.connection?.saveData);
+}
+
+/** Anisotropia menor em dispositivos leves: o filtro 8x custa banda de memória em GPUs móveis */
+function getMaxAnisotropy(): number {
+  return prefersLightAssets() ? 4 : 8;
+}
+
+/**
  * Verifica qual caminho de arquivo GLB/GLTF está disponível localmente para o corpo celeste.
  */
 async function resolveAvailableModelPath(config: CelestialBodyConfig): Promise<string | null> {
-  const uniquePaths = Array.from(new Set([config.modelPath, ...config.candidatePaths]));
+  const preferred =
+    prefersLightAssets() && config.mobileModelPath ? [config.mobileModelPath] : [];
+  const uniquePaths = Array.from(
+    new Set([...preferred, config.modelPath, ...config.candidatePaths])
+  );
 
   for (const candidate of uniquePaths) {
     try {
-      const response = await fetch(candidate, { method: 'HEAD', cache: 'no-cache' });
+      const response = await fetch(candidate, { method: 'HEAD' });
       if (response.ok) {
         const contentType = response.headers.get('content-type') || '';
         // Evita falso positivo caso o servidor SPA retorne index.html para uma rota inexistente
@@ -90,7 +137,7 @@ function buildNormalizedModelGroup(gltf: GLTF, config: CelestialBodyConfig): THR
           }
           if (cloned.map) {
             cloned.map.colorSpace = THREE.SRGBColorSpace;
-            cloned.map.anisotropy = 8;
+            cloned.map.anisotropy = getMaxAnisotropy();
           }
           cloned.needsUpdate = true;
         }
@@ -137,7 +184,7 @@ export async function preloadAllCelestialModels(
     return cachedResult;
   }
 
-  const loader = new GLTFLoader();
+  const loader = getLoader();
   const totalBodies = CELESTIAL_BODY_ORDER.length;
   const perBodyProgress: Record<CelestialBodyId, number> = {
     earth: 0,
@@ -158,10 +205,9 @@ export async function preloadAllCelestialModels(
 
   emitOverallProgress('Verificando modelos 3D dos corpos celestes...');
 
-  for (const id of CELESTIAL_BODY_ORDER) {
+  // Os três corpos são baixados em paralelo (antes era sequencial, somando as latências)
+  const loadBody = async (id: CelestialBodyId): Promise<void> => {
     const config = CELESTIAL_BODIES[id];
-    emitOverallProgress(`Preparando ${config.name}...`);
-
     const resolvedPath = await resolveAvailableModelPath(config);
 
     if (!resolvedPath) {
@@ -174,7 +220,7 @@ export async function preloadAllCelestialModels(
       };
       perBodyProgress[id] = 100;
       emitOverallProgress(`${config.name}: esfera provisória configurada`);
-      continue;
+      return;
     }
 
     const gltf = await new Promise<GLTF>((resolve, reject) => {
@@ -211,7 +257,9 @@ export async function preloadAllCelestialModels(
     };
     perBodyProgress[id] = 100;
     emitOverallProgress(`${config.name} carregado`);
-  }
+  };
+
+  await Promise.all(CELESTIAL_BODY_ORDER.map((id) => loadBody(id)));
 
   const finalAssets = assetCache as Record<CelestialBodyId, LoadedCelestialAsset>;
   onProgress({
@@ -267,16 +315,16 @@ function buildNormalizedArtifactGroup(gltf: GLTF, id: SpaceArtifactId): THREE.Gr
         ) {
           if (cloned.map) {
             cloned.map.colorSpace = THREE.SRGBColorSpace;
-            cloned.map.anisotropy = 8;
+            cloned.map.anisotropy = getMaxAnisotropy();
           }
           if (cloned.normalMap) {
-            cloned.normalMap.anisotropy = 8;
+            cloned.normalMap.anisotropy = getMaxAnisotropy();
           }
           if (cloned.roughnessMap) {
-            cloned.roughnessMap.anisotropy = 8;
+            cloned.roughnessMap.anisotropy = getMaxAnisotropy();
           }
           if (cloned.metalnessMap) {
-            cloned.metalnessMap.anisotropy = 8;
+            cloned.metalnessMap.anisotropy = getMaxAnisotropy();
           }
           cloned.needsUpdate = true;
         }
@@ -316,7 +364,7 @@ export async function loadSpaceArtifactModel(id: SpaceArtifactId): Promise<THREE
   }
 
   const config = SPACE_ARTIFACTS[id];
-  const loader = new GLTFLoader();
+  const loader = getLoader();
 
   const promise = new Promise<THREE.Group>((resolve, reject) => {
     loader.load(
@@ -340,13 +388,46 @@ export async function loadSpaceArtifactModel(id: SpaceArtifactId): Promise<THREE
 }
 
 /**
+ * Indica se o modelo do artefato já está em cache (pronto para exibição imediata).
+ */
+export function isSpaceArtifactCached(id: SpaceArtifactId): boolean {
+  return Boolean(artifactCache[id]);
+}
+
+/** Aguarda um momento ocioso do navegador (fallback para setTimeout no Safari). */
+function waitForIdle(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    if (typeof w.requestIdleCallback === 'function') {
+      w.requestIdleCallback(() => resolve(), { timeout: timeoutMs });
+    } else {
+      setTimeout(resolve, Math.min(timeoutMs, 300));
+    }
+  });
+}
+
+/**
  * Pré-carrega silenciosamente em segundo plano os modelos 3D dos 5 artefatos para que
  * a transição em velocidade da luz exiba o objeto 3D imediatamente ao chegar.
+ *
+ * - Com "Economia de dados" ativa, nada é baixado antecipadamente (os modelos carregam sob demanda).
+ * - Cada download espera um momento ocioso do navegador, para não disputar o thread principal
+ *   com a renderização da cena (o parse do GLB e a decodificação das texturas custam CPU).
  */
 export async function preloadAllSpaceArtifacts(): Promise<void> {
+  if (isSaveDataEnabled()) return;
+  const light = prefersLightAssets();
+
   for (const id of SPACE_ARTIFACT_ORDER) {
     try {
+      await waitForIdle(light ? 2000 : 1000);
       await loadSpaceArtifactModel(id);
+      if (light) {
+        // Pausa curta entre downloads no mobile para preservar fluidez de 60fps na cena 3D ativa
+        await new Promise((r) => setTimeout(r, 400));
+      }
     } catch {
       // Silencioso no pré-carregamento em background
     }

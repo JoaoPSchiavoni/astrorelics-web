@@ -7,6 +7,7 @@ import {
   SpaceArtifactId,
   TravelPhase,
 } from '../../types/experience';
+import { getBaseFov } from '../../utils/cameraFraming';
 
 export interface TravelRuntimeState {
   isTraveling: boolean;
@@ -52,7 +53,7 @@ export const HyperspaceTransition: React.FC<HyperspaceTransitionProps> = ({
   onPhaseChange,
   onTravelComplete,
 }) => {
-  const { camera } = useThree();
+  const { camera, size } = useThree();
   const instancedRef = useRef<THREE.InstancedMesh>(null);
   const tunnelGlowRef = useRef<THREE.Mesh>(null);
   const lastPhaseRef = useRef<TravelPhase>('idle');
@@ -125,14 +126,16 @@ export const HyperspaceTransition: React.FC<HyperspaceTransitionProps> = ({
   useFrame((_, delta) => {
     const state = travelRef.current;
     const perspCam = camera as THREE.PerspectiveCamera;
+    const aspect = size.height > 0 ? size.width / size.height : 1.0;
+    const baseFov = getBaseFov(aspect);
 
     if (!state.isTraveling) {
       if (lastPhaseRef.current !== 'idle') {
         lastPhaseRef.current = 'idle';
       }
       state.warpIntensity = THREE.MathUtils.damp(state.warpIntensity, 0, 10, delta);
-      if (Math.abs(perspCam.fov - 42) > 0.02) {
-        perspCam.fov = THREE.MathUtils.damp(perspCam.fov, 42, 8, delta);
+      if (Math.abs(perspCam.fov - baseFov) > 0.02) {
+        perspCam.fov = THREE.MathUtils.damp(perspCam.fov, baseFov, 8, delta);
         perspCam.updateProjectionMatrix();
       }
       if (instancedRef.current) {
@@ -188,7 +191,7 @@ export const HyperspaceTransition: React.FC<HyperspaceTransitionProps> = ({
 
       // Efeito de câmera estilo salto na velocidade da luz (Star Wars Hyperdrive)
       const fovBoost = isJump ? 13.5 : 4.2;
-      const targetFov = 42 + warp * fovBoost;
+      const targetFov = baseFov + warp * fovBoost;
       perspCam.fov = THREE.MathUtils.damp(perspCam.fov, targetFov, 8.0, safeDelta);
       perspCam.updateProjectionMatrix();
 

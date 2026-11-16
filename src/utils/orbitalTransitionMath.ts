@@ -34,18 +34,18 @@ const CANONICAL_SLOTS: Record<
 > = {
   center: {
     desktop: [0.28, 0.05, 0.0],
-    tablet: [0.1, 0.08, 0.0],
-    mobile: [0.0, 0.02, 0.0],
+    tablet: [0.0, 0.06, 0.0],
+    mobile: [0.0, 0.08, 0.0],
   },
   left: {
     desktop: [-4.15, 0.68, -5.2],
-    tablet: [-2.85, 0.78, -5.1],
-    mobile: [-1.45, 2.25, -4.9],
+    tablet: [-3.25, 0.55, -5.1],
+    mobile: [-1.35, 1.98, -4.9],
   },
   right: {
     desktop: [4.0, -0.52, -5.2],
-    tablet: [2.75, -0.48, -5.1],
-    mobile: [1.45, 2.25, -4.9],
+    tablet: [3.25, -0.42, -5.1],
+    mobile: [1.35, 1.98, -4.9],
   },
 };
 
@@ -101,15 +101,18 @@ function getClampedCardinalPoints(
   viewportTier: ViewportTier,
   aspect: number
 ): Record<OrbitalSlot, [number, number, number]> {
-  const centerPos = CANONICAL_SLOTS.center[viewportTier];
-  const rawLeft = CANONICAL_SLOTS.left[viewportTier];
-  const rawRight = CANONICAL_SLOTS.right[viewportTier];
+  const isMobileLandscape = viewportTier === 'mobile' && aspect > 1.05;
+  const effectiveTier: ViewportTier = isMobileLandscape ? 'tablet' : viewportTier;
+
+  const centerPos = CANONICAL_SLOTS.center[effectiveTier];
+  const rawLeft = CANONICAL_SLOTS.left[effectiveTier];
+  const rawRight = CANONICAL_SLOTS.right[effectiveTier];
 
   const clampXAtZ = (x: number, z: number) => {
     const distFromCam = CAMERA_Z - z;
     const halfHeight = distFromCam * Math.tan(THREE.MathUtils.degToRad(21));
     const halfWidth = halfHeight * aspect;
-    const safeMaxX = Math.max(1.25, halfWidth - 0.68);
+    const safeMaxX = Math.max(0.88, halfWidth - 0.56);
     return THREE.MathUtils.clamp(x, -safeMaxX, safeMaxX);
   };
 

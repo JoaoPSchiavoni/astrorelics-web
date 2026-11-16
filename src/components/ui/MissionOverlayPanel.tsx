@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X,
   BatteryCharging,
@@ -15,6 +15,8 @@ import {
   Lock,
   ArrowRight,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Radio,
 } from 'lucide-react';
 import { getMissions, MISSION_ORDER } from '../../config/missions';
@@ -64,6 +66,7 @@ interface MissionOverlayPanelProps {
   onFocusArtifact: (artifactId: SpaceArtifactId) => void;
   onUnlockEnding: (missionId: MissionId, endingId: string) => void;
   onActiveRunChange: (hasActiveRun: boolean) => void;
+  onResetOrientation?: () => void;
 }
 
 interface BreadcrumbEntry {
@@ -143,12 +146,16 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
   onFocusArtifact,
   onUnlockEnding,
   onActiveRunChange,
+  onResetOrientation,
 }) => {
   const { lang } = useLanguage();
   const isEn = lang === 'en';
   const missionsMap = getMissions(lang);
   const echoesPremise = getEchoesPremise(lang);
   const echoesSignals = getEchoesSignals(lang);
+
+  const [isMinimized, setIsMinimized] = useState<boolean>(false);
+  const sheetDragStartYRef = useRef<number | null>(null);
 
   const [activePathId, setActivePathId] = useState<string | null>(null);
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
@@ -290,6 +297,28 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   });
 
+  useEffect(() => {
+    if (!isOpen) {
+      setIsMinimized(false);
+    }
+  }, [isOpen]);
+
+  const handleHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement | null)?.closest('button')) return;
+    sheetDragStartYRef.current = e.clientY;
+  };
+
+  const handleHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (sheetDragStartYRef.current === null) return;
+    const dy = e.clientY - sheetDragStartYRef.current;
+    sheetDragStartYRef.current = null;
+    if (dy > 24) {
+      setIsMinimized(true);
+    } else if (dy < -24) {
+      setIsMinimized(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const activeMood: MissionEnvironmentMood = currentNode?.environmentMood ?? 'normal';
@@ -316,6 +345,15 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
     : mission.missionBadge;
   const headerYear = isEchoesMode ? '5–8 min' : mission.yearLabel;
 
+  const activeEchoesSignalCfg =
+    isEchoesMode && activeEchoesSignalId ? echoesSignals[activeEchoesSignalId] : null;
+  const discoveredForActiveSignal =
+    activeEchoesSignalId ? echoesState.discoveredClues[activeEchoesSignalId] ?? [] : [];
+  const activeSelectedHotspot =
+    activeEchoesSignalCfg && selectedHotspotId
+      ? activeEchoesSignalCfg.hotspots.find((h) => h.id === selectedHotspotId) ?? null
+      : null;
+
   return (
     <>
       {isEchoesMode && echoesDustOverlayPercent > 15 ? (
@@ -335,66 +373,188 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
         />
       )}
 
-      {/* Painel Lateral Direito de Missões */}
+      {/* Painel de Missões: Bottom Sheet retrátil no mobile (< 768px) e Painel Lateral Direito intacto no desktop (>= 768px) */}
       <aside
         aria-label={isEn ? 'Interactive Missions Center' : 'Centro de Missões Interativas'}
-        className="fixed right-3 sm:right-24 top-16 sm:top-20 bottom-20 sm:bottom-24 z-30 w-[calc(100vw-1.5rem)] sm:w-[475px] md:w-[530px] pointer-events-auto flex flex-col"
+        className={`fixed z-30 pointer-events-auto flex flex-col transition-all duration-300 ${
+          isMinimized
+            ? 'inset-x-2.5 bottom-2.5 pb-safe md:pb-0 md:inset-x-auto md:right-6 lg:right-24 md:top-20 md:bottom-24 md:w-[530px]'
+            : 'inset-x-2.5 bottom-2.5 top-[4.5rem] pb-safe md:pb-0 md:inset-x-auto md:right-6 lg:right-24 md:top-20 md:bottom-24 md:w-[530px]'
+        }`}
       >
         <div
-          className={`flex flex-col h-full rounded-2xl bg-[#040B18]/94 backdrop-blur-2xl border ${moodStyle.border} shadow-[0_24px_60px_rgba(0,0,0,0.85)] overflow-hidden transition-colors duration-300`}
+          className={`flex flex-col h-full rounded-2xl bg-[#040B18]/95 backdrop-blur-2xl border ${moodStyle.border} shadow-[0_24px_60px_rgba(0,0,0,0.85)] overflow-hidden transition-colors duration-300`}
         >
-          {/* Cabeçalho Fixo do Painel */}
-          <div className="px-4 py-3 bg-[#07142B]/90 border-b border-slate-800/90 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-3 min-w-0">
+          {/* Cabeçalho Fixo do Painel (com alça de arraste para recolher/expandir no mobile) */}
+          <div
+            onPointerDown={handleHeaderPointerDown}
+            onPointerUp={handleHeaderPointerUp}
+            onPointerCancel={handleHeaderPointerUp}
+            className="px-3.5 sm:px-4 pt-2 pb-2.5 sm:py-3 bg-[#07142B]/95 border-b border-slate-800/90 shrink-0 select-none touch-none-ui"
+          >
+            <div
+              onClick={() => setIsMinimized((prev) => !prev)}
+              className="md:hidden w-10 h-1 rounded-full bg-slate-600/80 mx-auto mb-2 cursor-pointer"
+            />
+            <div className="flex items-center justify-between gap-2 sm:gap-3">
               <div
-                className="w-10 h-10 rounded-xl bg-[#040A17] border p-1 shrink-0"
-                style={{ borderColor: isEchoesMode ? '#38BDF8' : mission.accentColor }}
+                onClick={() => {
+                  if (isMinimized) setIsMinimized(false);
+                }}
+                className="flex items-center gap-2.5 sm:gap-3 min-w-0 cursor-pointer md:cursor-default"
               >
-                <ArtifactCartoonIcon id={headerIconId} className="w-full h-full" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/35 text-[10px] font-mono font-semibold uppercase tracking-wider text-amber-300">
-                    {headerBadge}
-                  </span>
-                  <span className="text-[11px] text-slate-400 font-mono truncate">
-                    {headerYear}
-                  </span>
+                <div
+                  className="w-10 h-10 rounded-xl bg-[#040A17] border p-1 shrink-0"
+                  style={{ borderColor: isEchoesMode ? '#38BDF8' : mission.accentColor }}
+                >
+                  <ArtifactCartoonIcon id={headerIconId} className="w-full h-full" />
                 </div>
-                <h2 className="font-display font-bold text-sm sm:text-base text-white truncate mt-0.5">
-                  {headerTitle}
-                </h2>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/35 text-[10px] font-mono font-semibold uppercase tracking-wider text-amber-300 truncate">
+                      {headerBadge}
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono truncate hidden xs:inline">
+                      {headerYear}
+                    </span>
+                  </div>
+                  <h2 className="font-display font-bold text-sm sm:text-base text-white truncate mt-0.5">
+                    {headerTitle}
+                  </h2>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
-              {!isEchoesMode && (currentNode || currentEnding) && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {!isEchoesMode && (currentNode || currentEnding) && (
+                  <button
+                    type="button"
+                    onClick={handleReturnToHub}
+                    title={isEn ? 'Back to paths selection' : 'Voltar para a seleção de caminhos'}
+                    className="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:h-8 px-2.5 rounded-lg bg-[#0B1E3D] hover:bg-[#122B54] border border-sky-400/35 text-xs font-medium text-sky-200 flex items-center justify-center gap-1 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                    <span className="hidden sm:inline">{isEn ? 'Paths' : 'Caminhos'}</span>
+                  </button>
+                )}
+
+                {/* Botão Mobile de Minimizar / Ver 3D */}
                 <button
                   type="button"
-                  onClick={handleReturnToHub}
-                  title={isEn ? 'Back to paths selection' : 'Voltar para a seleção de caminhos'}
-                  className="h-8 px-2.5 rounded-lg bg-[#0B1E3D] hover:bg-[#122B54] border border-sky-400/35 text-xs font-medium text-sky-200 flex items-center gap-1 transition-colors"
+                  onClick={() => setIsMinimized((prev) => !prev)}
+                  aria-expanded={!isMinimized}
+                  aria-label={
+                    isMinimized
+                      ? isEn
+                        ? 'Expand mission panel'
+                        : 'Expandir painel de missão'
+                      : isEn
+                      ? 'Minimize mission panel to inspect 3D'
+                      : 'Minimizar painel para ver modelo 3D'
+                  }
+                  className="md:hidden min-h-[44px] px-2.5 rounded-xl bg-[#0A1D3B] border border-sky-400/50 text-xs font-display font-semibold text-sky-100 flex items-center gap-1 transition-colors"
                 >
-                  <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
-                  <span className="hidden sm:inline">{isEn ? 'Paths' : 'Caminhos'}</span>
+                  {isMinimized ? (
+                    <>
+                      <span>{isEn ? 'Expand' : 'Expandir'}</span>
+                      <ChevronUp className="w-4 h-4 text-sky-400" />
+                    </>
+                  ) : (
+                    <>
+                      <span>{isEn ? '3D View' : 'Ver 3D'}</span>
+                      <ChevronDown className="w-4 h-4 text-sky-400" />
+                    </>
+                  )}
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  setEchoesDustOverlayPercent(0);
-                  onClose();
-                }}
-                aria-label={isEn ? 'Close missions panel' : 'Fechar painel de missões'}
-                title={isEn ? 'Close (Esc)' : 'Fechar (Esc)'}
-                className="w-8 h-8 rounded-lg bg-[#0A1931] hover:bg-[#13294B] border border-slate-700/80 text-slate-300 hover:text-white flex items-center justify-center transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEchoesDustOverlayPercent(0);
+                    onClose();
+                  }}
+                  aria-label={isEn ? 'Close missions panel' : 'Fechar painel de missões'}
+                  title={isEn ? 'Close (Esc)' : 'Fechar (Esc)'}
+                  className="min-h-[44px] min-w-[44px] md:min-h-0 md:min-w-0 md:w-8 md:h-8 rounded-xl md:rounded-lg bg-[#0A1931] hover:bg-[#13294B] border border-slate-700/80 text-slate-300 hover:text-white flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+
+            {/* Resumo interativo quando minimizado no mobile (exibe progresso de pistas e pista recém-clicada no 3D) */}
+            {isMinimized && (
+              <div className="md:hidden mt-2 pt-2 border-t border-slate-800/80 space-y-2 animate-fadeIn">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    {activeEchoesSignalCfg ? (
+                      <p className="text-xs text-sky-200 font-medium truncate">
+                        <strong className="text-amber-300">
+                          {discoveredForActiveSignal.length}/3 {isEn ? 'clues' : 'pistas'}
+                        </strong>{' '}
+                        ·{' '}
+                        {isEn
+                          ? 'Drag in 360° & tap glowing points'
+                          : 'Gire em 360° e toque nos pontos luminosos'}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-300 truncate">
+                        {isEn
+                          ? '3D view active · Tap Expand to return to mission'
+                          : 'Visão 3D livre · Toque em Expandir para voltar à missão'}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {onResetOrientation && (
+                      <button
+                        type="button"
+                        onClick={onResetOrientation}
+                        aria-label={isEn ? 'Reset 3D angle' : 'Restaurar ângulo 3D'}
+                        className="min-h-[44px] min-w-[44px] px-2.5 rounded-xl bg-[#050C1A] border border-slate-700 text-xs text-sky-200 flex items-center justify-center gap-1"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
+                      </button>
+                    )}
+
+                    {activeEchoesSignalCfg && discoveredForActiveSignal.length >= 3 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsMinimized(false)}
+                        className="min-h-[44px] px-3 rounded-xl bg-amber-400 text-[#020814] font-display font-bold text-xs flex items-center gap-1 shadow-lg animate-pulse"
+                      >
+                        <span>{isEn ? '3/3 Found! Continue →' : '3/3 Pistas! Continuar →'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {activeSelectedHotspot && (
+                  <div className="rounded-xl px-3 py-2 bg-[#071D26]/95 border border-emerald-400/50 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-display font-bold text-emerald-200 flex items-center gap-1.5 truncate">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                        {activeSelectedHotspot.label}
+                      </span>
+                      <span className="text-[10px] font-mono text-emerald-300 shrink-0">
+                        {isEn ? 'Recorded' : 'Registrada'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-200 italic mt-0.5 line-clamp-2">
+                      {activeSelectedHotspot.observation}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
+          {/* Conteúdo do Painel (oculto no mobile apenas quando minimizado; sempre visível no desktop >= md) */}
+          <div
+            className={`${
+              isMinimized ? 'hidden md:flex' : 'flex'
+            } flex-col flex-1 min-h-0 overflow-hidden`}
+          >
           {/* Seletor de Missões no Topo */}
           <div className="px-4 py-2 bg-[#030915] border-b border-slate-800/90 flex items-center gap-1.5 overflow-x-auto no-scrollbar shrink-0">
             <button
@@ -404,7 +564,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                 setEchoesDustOverlayPercent(0);
                 onSelectMissionMode('echoes_of_space');
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-display font-semibold flex items-center gap-1.5 border whitespace-nowrap transition-all ${
+              className={`min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-xl text-xs font-display font-semibold flex items-center gap-1.5 border whitespace-nowrap transition-all ${
                 isEchoesMode
                   ? 'bg-[#0F274E] border-sky-400 text-white shadow-[0_0_14px_rgba(56,189,248,0.25)]'
                   : 'bg-[#061022] border-slate-800 text-slate-400 hover:text-slate-200'
@@ -430,7 +590,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                     onSelectEchoesSignal(null);
                     onSelectMissionMode(id);
                   }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-display font-semibold flex items-center gap-1.5 border whitespace-nowrap transition-all ${
+                  className={`min-h-[44px] md:min-h-0 px-3 py-1.5 rounded-xl text-xs font-display font-semibold flex items-center gap-1.5 border whitespace-nowrap transition-all ${
                     isSelected
                       ? 'bg-[#0F274E] border-amber-400/70 text-white shadow-sm'
                       : 'bg-[#061022] border-slate-800 text-slate-400 hover:text-slate-200'
@@ -578,7 +738,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
           )}
 
           {/* Corpo Rolável do Painel */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4 custom-scrollbar">
             {isEchoesMode ? (
               <EchoesOfSpacePanel
                 echoesState={echoesState}
@@ -588,7 +748,12 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                 onToggleRevealCluesList={onToggleRevealCluesList}
                 onSelectSignal={onSelectEchoesSignal}
                 onFocusArtifact={onFocusArtifact}
-                onInspectHotspot={onInspectHotspot}
+                onInspectHotspot={(hotspot) => {
+                  onInspectHotspot(hotspot);
+                  if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                    setIsMinimized(true);
+                  }
+                }}
                 onUpdateEchoesState={onUpdateEchoesState}
                 onResetEchoes={onResetEchoes}
                 onExploreFreely={() => {
@@ -597,6 +762,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                   onClose();
                 }}
                 onDustLevelChange={setEchoesDustOverlayPercent}
+                onRequestMinimize={() => setIsMinimized(true)}
               />
             ) : (
               <>
@@ -984,7 +1150,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                         <button
                           type="button"
                           onClick={() => handleStartPath(activePath)}
-                          className="h-10 px-4 rounded-xl bg-[#0B2147] hover:bg-[#123166] border border-sky-400/50 text-xs font-display font-semibold text-white flex items-center justify-center gap-2 transition-colors"
+                          className="min-h-[44px] md:min-h-0 h-11 md:h-10 px-4 rounded-xl bg-[#0B2147] hover:bg-[#123166] border border-sky-400/50 text-xs font-display font-semibold text-white flex items-center justify-center gap-2 transition-colors"
                         >
                           <RotateCcw className="w-3.5 h-3.5 text-sky-400" />
                           <span>
@@ -998,7 +1164,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                       <button
                         type="button"
                         onClick={handleReturnToHub}
-                        className="h-10 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#030914] font-display font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-lg"
+                        className="min-h-[44px] md:min-h-0 h-11 md:h-10 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#030914] font-display font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-lg"
                       >
                         <Compass className="w-4 h-4" />
                         <span>{isEn ? 'Explore Another Path' : 'Explorar Outro Caminho'}</span>
@@ -1008,6 +1174,7 @@ export const MissionOverlayPanel: React.FC<MissionOverlayPanelProps> = ({
                 )}
               </>
             )}
+          </div>
           </div>
         </div>
       </aside>

@@ -10,6 +10,7 @@ interface MissionButtonProps {
   totalEndings: number;
   hasActiveRun: boolean;
   onToggle: () => void;
+  isLandscapeMobile?: boolean;
 }
 
 export const MissionButton: React.FC<MissionButtonProps> = ({
@@ -19,12 +20,19 @@ export const MissionButton: React.FC<MissionButtonProps> = ({
   totalEndings,
   hasActiveRun,
   onToggle,
+  isLandscapeMobile = false,
 }) => {
   const { lang } = useLanguage();
   const isEn = lang === 'en';
 
+  // Em telas mobile (< 768px) ou landscape mobile, o botão de Missões já fica integrado no HeaderHud
+  // para não obstruir a manipulação 3D no centro da tela.
+  if (isLandscapeMobile) {
+    return null;
+  }
+
   return (
-    <div className="fixed right-3 sm:right-5 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
+    <div className="hidden md:block fixed right-5 top-1/2 -translate-y-1/2 z-30 pointer-events-auto">
       <button
         type="button"
         onClick={onToggle}
@@ -48,7 +56,7 @@ export const MissionButton: React.FC<MissionButtonProps> = ({
         </span>
 
         {/* Ícone do Opportunity / Missão */}
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#040B18] border border-amber-400/40 p-1 shrink-0 group-hover:scale-105 transition-transform shadow-inner">
+        <div className="w-10 h-10 rounded-xl bg-[#040B18] border border-amber-400/40 p-1 shrink-0 group-hover:scale-105 transition-transform shadow-inner">
           <ArtifactCartoonIcon id="opportunity_rover" className="w-full h-full" />
         </div>
 
@@ -56,7 +64,7 @@ export const MissionButton: React.FC<MissionButtonProps> = ({
         <div className="text-left">
           <div className="flex items-center gap-1.5">
             <Compass className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="font-display font-bold text-xs sm:text-sm tracking-wide text-white">
+            <span className="font-display font-bold text-sm tracking-wide text-white">
               {isEn ? 'Missions' : 'Missões'}
             </span>
           </div>
@@ -71,7 +79,7 @@ export const MissionButton: React.FC<MissionButtonProps> = ({
               {unlockedCount}/{totalEndings}
             </span>
             {hasActiveRun && (
-              <span className="text-[10px] text-sky-300 font-medium hidden sm:inline">
+              <span className="text-[10px] text-sky-300 font-medium">
                 · {isEn ? 'Active' : 'Ativa'}
               </span>
             )}
