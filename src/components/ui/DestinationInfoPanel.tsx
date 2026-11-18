@@ -88,22 +88,9 @@ export const DestinationInfoPanel: React.FC<DestinationInfoPanelProps> = ({
     }
   }, [activeArtifactId, selectedId, isLandscapeMobile]);
 
-  // Se o usuário começar a girar/manipular o modelo 3D e o painel estiver totalmente expandido no mobile,
-  // reduz para intermediário/recolhido para não bloquear a visão do objeto 3D
-  useEffect(() => {
-    if (hasInteracted3D && sheetState === 'expanded') {
-      setSheetState(activeArtifactId ? 'half' : 'collapsed');
-    }
-  }, [hasInteracted3D, activeArtifactId, sheetState]);
-
   const handleSheetPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     dragStartYRef.current = e.clientY;
     dragStartTimeRef.current = performance.now();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore if synthetic event
-    }
   };
 
   const handleSheetPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -112,37 +99,22 @@ export const DestinationInfoPanel: React.FC<DestinationInfoPanelProps> = ({
     const dt = Math.max(1, performance.now() - dragStartTimeRef.current);
     const velocity = dy / dt; // px/ms
     dragStartYRef.current = null;
-    try {
-      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }
-    } catch {
-      // ignore
-    }
 
     if (Math.abs(dy) < 18 && Math.abs(velocity) < 0.35) return;
 
     if (dy < -18 || velocity < -0.35) {
-      // Arrastou para cima -> expande
-      setSheetState((prev) =>
-        prev === 'collapsed' ? 'half' : prev === 'half' ? 'expanded' : 'expanded'
-      );
+      // Arrastou para cima -> mostra o texto/conteúdo
+      setSheetState(activeArtifact ? 'half' : 'expanded');
     } else if (dy > 18 || velocity > 0.35) {
-      // Arrastou para baixo -> recolhe
-      setSheetState((prev) =>
-        prev === 'expanded' ? 'half' : prev === 'half' ? 'collapsed' : 'collapsed'
-      );
+      // Arrastou para baixo -> esconde o texto/conteúdo
+      setSheetState('collapsed');
     }
   };
 
   const cycleSheetState = () => {
-    if (activeArtifact) {
-      setSheetState((prev) =>
-        prev === 'collapsed' ? 'half' : prev === 'half' ? 'expanded' : 'collapsed'
-      );
-    } else {
-      setSheetState((prev) => (prev === 'collapsed' ? 'expanded' : 'collapsed'));
-    }
+    setSheetState((prev) =>
+      prev === 'collapsed' ? (activeArtifact ? 'half' : 'expanded') : 'collapsed'
+    );
   };
 
   if (unidentifiedInvestigationMode) {
@@ -290,24 +262,19 @@ export const DestinationInfoPanel: React.FC<DestinationInfoPanelProps> = ({
                         ? 'Expand artifact information panel'
                         : 'Expandir painel de informações do equipamento'
                       : isEn
-                      ? 'Toggle information panel size'
-                      : 'Alternar tamanho do painel de informações'
+                      ? 'Hide artifact information panel'
+                      : 'Esconder texto e informações do equipamento'
                   }
-                  className="min-h-[44px] px-3 rounded-xl bg-[#081730]/95 border border-sky-400/45 text-xs font-display font-semibold text-sky-200 flex items-center gap-1 shadow-lg transition-all"
+                  className="min-h-[44px] px-3 rounded-xl bg-[#081730]/95 active:bg-[#10274D] border border-sky-400/45 text-xs font-display font-semibold text-sky-200 flex items-center gap-1 shadow-lg transition-all cursor-pointer"
                 >
                   {sheetState === 'collapsed' ? (
                     <>
-                      <span>{isEn ? 'Read Info' : 'Ver Info'}</span>
-                      <ChevronUp className="w-4 h-4 text-sky-400" />
-                    </>
-                  ) : sheetState === 'half' ? (
-                    <>
-                      <span>{isEn ? 'More' : 'Expandir'}</span>
+                      <span>{isEn ? 'Expand' : 'Expandir'}</span>
                       <ChevronUp className="w-4 h-4 text-sky-400" />
                     </>
                   ) : (
                     <>
-                      <span>{isEn ? '3D View' : 'Ver 3D'}</span>
+                      <span>{isEn ? 'Hide' : 'Esconder'}</span>
                       <ChevronDown className="w-4 h-4 text-sky-400" />
                     </>
                   )}
@@ -329,9 +296,7 @@ export const DestinationInfoPanel: React.FC<DestinationInfoPanelProps> = ({
                 onPointerDown={handleSheetPointerDown}
                 onPointerUp={handleSheetPointerUp}
                 onPointerCancel={handleSheetPointerUp}
-                onClick={() => {
-                  if (sheetState === 'collapsed') setSheetState('half');
-                }}
+                onClick={cycleSheetState}
                 className="px-3.5 pt-2 pb-2.5 cursor-pointer select-none touch-none-ui"
               >
                 <div className="w-10 h-1 rounded-full bg-slate-600/80 mx-auto mb-2" />
@@ -409,12 +374,8 @@ export const DestinationInfoPanel: React.FC<DestinationInfoPanelProps> = ({
                     </button>
                   </div>
 
-                  {/* Corpo de texto rolável com altura adaptada ao estado half vs expanded */}
-                  <div
-                    className={`mt-2.5 text-xs sm:text-[13px] text-slate-200 leading-relaxed overflow-y-auto overscroll-contain custom-scrollbar pr-1 ${
-                      sheetState === 'expanded' ? 'max-h-[34dvh]' : 'max-h-[16dvh]'
-                    }`}
-                  >
+                  {/* Corpo de texto rolável */}
+                  <div className="mt-2.5 text-xs sm:text-[13px] text-slate-200 leading-relaxed overflow-y-auto overscroll-contain custom-scrollbar pr-1 max-h-[24dvh]">
                     {activeTab === 'overview' && <p>{activeArtifact.description}</p>}
                     {activeTab === 'history' && <p>{activeArtifact.history}</p>}
                     {activeTab === 'importance' && <p>{activeArtifact.importance}</p>}

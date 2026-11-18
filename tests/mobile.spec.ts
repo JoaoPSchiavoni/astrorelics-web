@@ -94,6 +94,30 @@ test.describe('AstroRelics — Mobile-First & Responsiveness Acceptance Suite', 
     await expect(historyTab).toBeVisible();
     await historyTab.click();
 
+    // No mobile/tablet (< 1024px), testa o botão de Esconder / Expandir o texto do objeto 3D
+    const vp = page.viewportSize();
+    if (vp && vp.width < 1024) {
+      const hideTextBtn = page
+        .getByRole('button', {
+          name: /Esconder texto|Hide artifact information/i,
+        })
+        .filter({ visible: true })
+        .first();
+      await expect(hideTextBtn).toBeVisible();
+      await hideTextBtn.click();
+      await expect(historyTab).toBeHidden();
+
+      const expandTextBtn = page
+        .getByRole('button', {
+          name: /Expandir painel de informações|Expand artifact information/i,
+        })
+        .filter({ visible: true })
+        .first();
+      await expect(expandTextBtn).toBeVisible();
+      await expandTextBtn.click();
+      await expect(historyTab).toBeVisible();
+    }
+
     // Volta para o planeta
     await backBtn.click();
     await page.waitForTimeout(400);
