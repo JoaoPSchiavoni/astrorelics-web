@@ -150,6 +150,15 @@ test.describe('AstroRelics — Mobile-First & Responsiveness Acceptance Suite', 
     await closeMissionBtn.click();
     await expect(missionPanel).toBeHidden();
 
+    // 6. Garante que ao sair da aba / minimizar o navegador (blur / pagehide), o áudio é pausado imediatamente
+    const isPausedAfterBlur = await page.evaluate(() => {
+      window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new PageTransitionEvent('pagehide'));
+      const audio = document.getElementById('beyond-bg-music') as HTMLAudioElement | null;
+      return audio ? audio.paused : true;
+    });
+    expect(isPausedAfterBlur).toBe(true);
+
     expect(consoleErrors).toEqual([]);
   });
 });

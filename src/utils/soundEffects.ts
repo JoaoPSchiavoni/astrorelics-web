@@ -11,6 +11,7 @@ class SpaceSoundController {
   private baseBgVolume = 0.70;
   private stateChangeListeners: Set<(enabled: boolean) => void> = new Set();
   private interactionCleanup: (() => void) | null = null;
+  private wasPlayingBeforeHide = false;
 
   public isEnabled(): boolean {
     if (this.bgAudio) {
@@ -135,8 +136,8 @@ class SpaceSoundController {
     const audio = this.ensureBgAudio();
     if (!audio) return () => {};
 
-    // 1. Tenta reproduzir imediatamente
-    if (!this.userMuted) {
+    // 1. Tenta reproduzir imediatamente (somente se a aba estiver visível)
+    if (!this.userMuted && typeof document !== 'undefined' && !document.hidden) {
       audio.volume = this.baseBgVolume;
       audio.muted = false;
       const promise = audio.play();
@@ -151,6 +152,58 @@ class SpaceSoundController {
           });
       }
     }
+
+    // Pausa imediatamente o áudio e suspende o WebAudio quando o usuário sai da aba,
+    // minimiza o navegador, troca de aplicativo ou bloqueia a tela do celular.
+    const pauseForBackground = () => {
+      if (!audio.paused && !this.userMuted) {
+        this.wasPlayingBeforeHide = true;
+      }
+      try {
+        if (!audio.paused) {
+          audio.pause();
+        }
+      } catch {
+        // noop
+      }
+      if (this.ctx && this.ctx.state === 'running') {
+        this.ctx.suspend().catch(() => {});
+      }
+    };
+
+    const resumeFromBackground = () => {
+      if (
+        typeof document !== 'undefined' &&
+        document.hidden
+      ) {
+        return;
+      }
+      if (this.wasPlayingBeforeHide && !this.userMuted) {
+        this.wasPlayingBeforeHide = false;
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+        audio.volume = this.baseBgVolume;
+        audio.muted = false;
+        audio.play().catch(() => {});
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden || document.visibilityState === 'hidden') {
+        pauseForBackground();
+      } else if (document.visibilityState === 'visible') {
+        resumeFromBackground();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('freeze', pauseForBackground);
+    window.addEventListener('pagehide', pauseForBackground);
+    window.addEventListener('beforeunload', pauseForBackground);
+    window.addEventListener('blur', pauseForBackground);
+    window.addEventListener('focus', resumeFromBackground);
+    window.addEventListener('pageshow', resumeFromBackground);
 
     // 2. Escuta interação na tela para destravar a reprodução caso o navegador exija gesto
     const handleFirstInteraction = (e: Event) => {
@@ -194,6 +247,13 @@ class SpaceSoundController {
 
     return () => {
       cleanup();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('freeze', pauseForBackground);
+      window.removeEventListener('pagehide', pauseForBackground);
+      window.removeEventListener('beforeunload', pauseForBackground);
+      window.removeEventListener('blur', pauseForBackground);
+      window.removeEventListener('focus', resumeFromBackground);
+      window.removeEventListener('pageshow', resumeFromBackground);
       if (onStateChange) {
         this.stateChangeListeners.delete(onStateChange);
       }
@@ -217,6 +277,7 @@ class SpaceSoundController {
       this.playSubtleChime(520, 0.08);
       this.enabled = true;
     } else {
+      this.wasPlayingBeforeHide = false;
       this.stopBackgroundMusic();
       this.enabled = false;
     }
